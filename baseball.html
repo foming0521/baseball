@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Baseball Tracker</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --accent: #38bdf8;
+            --ball: #2ecc71;
+            --strike: #f1c40f;
+            --out: #e74c3c;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: #f8fafc; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        
+        /* 模式切換 */
+        .mode-selector { margin: 20px; display: flex; gap: 10px; }
+        .mode-btn { padding: 8px 16px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; border-radius: 20px; }
+        .mode-btn.active { background: var(--accent); color: var(--bg); font-weight: bold; }
+
+        .main-layout { display: flex; gap: 20px; max-width: 1200px; padding: 20px; flex-wrap: wrap; justify-content: center; }
+
+        /* 數據側邊欄 */
+        .sidebar { background: var(--panel); padding: 20px; border-radius: 12px; width: 220px; border-left: 4px solid var(--accent); }
+        .sidebar h3 { margin-top: 0; color: var(--accent); border-bottom: 1px solid #334155; padding-bottom: 5px; }
+        .stat-item { display: flex; justify-content: space-between; margin: 10px 0; font-family: 'Courier New', monospace; }
+
+        /* 中央計分板 */
+        .scoreboard { background: var(--panel); padding: 30px; border-radius: 20px; width: 400px; text-align: center; position: relative; }
+        
+        .diamond-container { position: relative; width: 120px; height: 120px; margin: 0 auto 20px; }
+        .base { position: absolute; width: 30px; height: 30px; background: #334155; transform: rotate(45deg); transition: 0.3s; border: 2px solid #475569; }
+        #base2 { top: 0; left: 45px; } #base3 { top: 45px; left: 0; } #base1 { top: 45px; right: 0; }
+        .base.occupied { background: var(--strike); box-shadow: 0 0 15px var(--strike); }
+
+        .big-light-row { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 15px 0; }
+        .light { width: 35px; height: 35px; border-radius: 50%; background: #0f172a; border: 2px solid #334155; }
+        .light.b-active { background: var(--ball); box-shadow: 0 0 15px var(--ball); }
+        .light.s-active { background: var(--strike); box-shadow: 0 0 15px var(--strike); }
+        .light.o-active { background: var(--out); box-shadow: 0 0 15px var(--out); }
+
+        .control-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; }
+        button { padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:active { transform: scale(0.95); }
+        .btn-s { background: var(--strike); color: #000; }
+        .btn-b { background: var(--ball); color: #000; }
+        .btn-f { background: #94a3b8; }
+        .btn-h { background: #0284c7; color: white; }
+        .btn-o { background: var(--out); color: white; grid-column: span 2; }
+        
+        .inning-tag { position: absolute; top: 10px; right: 20px; color: var(--accent); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="mode-selector">
+        <button class="mode-btn active" onclick="setMode('match')">對戰模式</button>
+        <button class="mode-btn" onclick="setMode('practice')">投打練習</button>
+        <button class="mode-btn" onclick="setMode('pitching')">純投球紀錄</button>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar" id="side-away">
+            <h3 id="label-away">先攻隊 (打擊)</h3>
+            <div class="stat-item"><span>打數 AB</span> <span id="away-ab">0</span></div>
+            <div class="stat-item"><span>安打 H</span> <span id="away-h">0</span></div>
+            <div class="stat-item"><span>打擊率 AVG</span> <span id="away-avg">.000</span></div>
+            <div class="stat-item"><span>上壘率 OBP</span> <span id="away-obp">.000</span></div>
+            <hr>
+            <div class="stat-item"><span>投球數 P</span> <span id="away-p">0</span></div>
+            <div class="stat-item"><span>好球率 S%</span> <span id="away-sp">0%</span></div>
+        </div>
+
+        <div class="scoreboard">
+            <div id="inning-display" class="inning-tag">1局上</div>
+            
+            <div class="diamond-container" id="diamond">
+                <div id="base2" class="base"></div>
+                <div id="base3" class="base"></div>
+                <div id="base1" class="base"></div>
+            </div>
+
+            <div class="big-light-row"><span>B</span> <div id="b-container" style="display:flex; gap:10px;"></div></div>
+            <div class="big-light-row"><span>S</span> <div id="s-container" style="display:flex; gap:10px;"></div></div>
+            <div class="big-light-row"><span>O</span> <div id="o-container" style="display:flex; gap:10px;"></div></div>
+
+            <div class="control-grid">
+                <button class="btn-s" onclick="record('strike')">STRIKE</button>
+                <button class="btn-b" onclick="record('ball')">BALL</button>
+                <button class="btn-f" onclick="record('foul')">FOUL (擦棒)</button>
+                <button class="btn-h" id="btn-hit" onclick="record('hit')">HIT (安打)</button>
+                <button class="btn-o" id="btn-out" onclick="record('out')">OUT (出局)</button>
+            </div>
+        </div>
+
+        <div class="sidebar" id="side-home">
+            <h3 id="label-home">主場隊 (投手)</h3>
+            <div class="stat-item"><span>打數 AB</span> <span id="home-ab">0</span></div>
+            <div class="stat-item"><span>安打 H</span> <span id="home-h">0</span></div>
+            <div class="stat-item"><span>打擊率 AVG</span> <span id="home-avg">.000</span></div>
+            <div class="stat-item"><span>上壘率 OBP</span> <span id="home-obp">.000</span></div>
+            <hr>
+            <div class="stat-item"><span>投球數 P</span> <span id="home-p">0</span></div>
+            <div class="stat-item"><span>好球率 S%</span> <span id="home-sp">0%</span></div>
+        </div>
+    </div>
+
+<script>
+    // 初始狀態
+    let currentMode = 'match'; // match, practice, pitching
+    let isTopInning = true; // 1: 局上(先攻打, 主場投), 0: 局下
+    let currentInning = 1;
+    let b=0, s=0, o=0;
+    let bases = [false, false, false];
+
+    // 數據結構
+    let stats = {
+        away: { ab:0, h:0, bb:0, pitches:0, strikes:0 },
+        home: { ab:0, h:0, bb:0, pitches:0, strikes:0 }
+    };
+
+    function init() {
+        renderLights('b-container', 3, 'b-active');
+        renderLights('s-container', 2, 's-active');
+        renderLights('o-container', 2, 'o-active');
+        updateUI();
+    }
+
+    function renderLights(id, count, activeClass) {
+        const div = document.getElementById(id);
+        div.innerHTML = '';
+        for(let i=0; i<count; i++) div.innerHTML += `<div class="light ${activeClass}-light"></div>`;
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+        
+        // 模式切換邏輯
+        document.getElementById('diamond').style.display = (mode === 'pitching') ? 'none' : 'block';
+        document.getElementById('btn-hit').style.display = (mode === 'pitching') ? 'none' : 'inline-block';
+        document.getElementById('btn-out').innerText = (mode === 'pitching') ? '揮空/結束' : 'OUT (出局)';
+        
+        resetGame();
+    }
+
+    function record(type) {
+        let batter = isTopInning ? stats.away : stats.home;
+        let pitcher = isTopInning ? stats.home : stats.away;
+
+        if (type === 'strike') {
+            pitcher.pitches++; pitcher.strikes++; s++;
+            if (s >= 3) { batter.ab++; record('out_logic'); }
+        } else if (type === 'ball') {
+            pitcher.pitches++; b++;
+            if (b >= 4) { batter.bb++; advanceRunners(true); resetCount(); }
+        } else if (type === 'foul') {
+            pitcher.pitches++; pitcher.strikes++;
+            if (s < 2) s++;
+        } else if (type === 'hit') {
+            pitcher.pitches++; batter.ab++; batter.h++;
+            advanceRunners(false); resetCount();
+        } else if (type === 'out') {
+            pitcher.pitches++; batter.ab++; record('out_logic');
+        } else if (type === 'out_logic') {
+            o++; resetCount();
+            if (o >= 3 && currentMode === 'match') switchSide();
+        }
+        updateUI();
+    }
+
+    function advanceRunners(isWalk) {
+        if (isWalk) {
+            if (bases[0] && bases[1] && bases[2]) {} 
+            else if (bases[0] && bases[1]) bases[2] = true;
+            else if (bases[0]) bases[1] = true;
+            bases[0] = true;
+        } else {
+            if (bases[2]) {} // Score!
+            bases[2] = bases[1]; bases[1] = bases[0]; bases[0] = true;
+        }
+    }
+
+    function resetCount() { b=0; s=0; }
+
+    function switchSide() {
+        alert(isTopInning ? "半局結束，換主場進攻！" : "第 " + currentInning + " 局結束！");
+        if (!isTopInning) currentInning++;
+        isTopInning = !isTopInning;
+        o = 0; bases = [false, false, false];
+    }
+
+    function updateUI() {
+        // 更新燈號
+        const update = (cls, val) => {
+            document.querySelectorAll(`.${cls}-light`).forEach((l, i) => l.classList.toggle(`${cls}`, i < val));
+        };
+        update('b-active', b); update('s-active', s); update('o-active', o);
+
+        // 更新壘包
+        document.getElementById('base1').classList.toggle('occupied', bases[0]);
+        document.getElementById('base2').classList.toggle('occupied', bases[1]);
+        document.getElementById('base3').classList.toggle('occupied', bases[2]);
+
+        // 更新標籤
+        document.getElementById('inning-display').innerText = `${currentInning}局${isTopInning?'上':'下'}`;
+        
+        // 更新數據面板
+        updateSidebar('away', stats.away, stats.home);
+        updateSidebar('home', stats.home, stats.away);
+    }
+
+    function updateSidebar(prefix, teamBat, teamPitch) {
+        const calcAvg = (h, ab) => ab===0 ? ".000" : (h/ab).toFixed(3).replace(/^0/,'');
+        const calcObp = (h, bb, ab) => (ab+bb)===0 ? ".000" : ((h+bb)/(ab+bb)).toFixed(3).replace(/^0/,'');
+        const calcSp = (s, p) => p===0 ? "0%" : Math.round((s/p)*100) + "%";
+
+        document.getElementById(`${prefix}-ab`).innerText = teamBat.ab;
+        document.getElementById(`${prefix}-h`).innerText = teamBat.h;
+        document.getElementById(`${prefix}-avg`).innerText = calcAvg(teamBat.h, teamBat.ab);
+        document.getElementById(`${prefix}-obp`).innerText = calcObp(teamBat.h, teamBat.bb, teamBat.ab);
+        document.getElementById(`${prefix}-p`).innerText = teamBat.pitches;
+        document.getElementById(`${prefix}-sp`).innerText = calcSp(teamBat.strikes, teamBat.pitches);
+        
+        // 視覺化提示誰在進攻
+        const isBatting = (prefix === 'away' && isTopInning) || (prefix === 'home' && !isTopInning);
+        document.getElementById(`side-${prefix}`).style.opacity = isBatting ? "1" : "0.6";
+        document.getElementById(`label-${prefix}`).innerText = isBatting ? "打擊方" : "防守方";
+    }
+
+    function resetGame() {
+        b=0; s=0; o=0; bases=[false,false,false];
+        stats = { away:{ab:0,h:0,bb:0,pitches:0,strikes:0}, home:{ab:0,h:0,bb:0,pitches:0,strikes:0} };
+        isTopInning = true; currentInning = 1;
+        updateUI();
+    }
+
+    init();
+</script>
+</body>
+</html>
